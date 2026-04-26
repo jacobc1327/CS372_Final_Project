@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   type Program,
   type ProgramBasics,
@@ -9,6 +18,7 @@ import {
   programs as presetPrograms,
   createEmptyProgram,
 } from "@/lib/mock-data";
+import { loadPersistedWorkspace, savePersistedWorkspace } from "@/lib/workspace-persistence";
 
 export interface Modifiers {
   volume: number;
@@ -64,6 +74,40 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [sandbox, setSandbox] = useState<SandboxState>(defaultSandbox);
   const [customMap, setCustomMap] = useState<Record<string, Program>>({});
   const [draftSet, setDraftSet] = useState<Set<string>>(new Set());
+  /** After true, localStorage has been read once (client-only). */
+  const [hydrated, setHydrated] = useState(false);
+  const skipNextSave = useRef(false);
+
+  useEffect(() => {
+    const data = loadPersistedWorkspace();
+    skipNextSave.current = true;
+    if (data) {
+      if (data.workingPrograms !== undefined) setWP(data.workingPrograms);
+      if (data.modsMap !== undefined) setModsMap(data.modsMap);
+      if (data.sandbox !== undefined) setSandbox(data.sandbox);
+      if (data.customMap !== undefined) setCustomMap(data.customMap);
+      if (data.draftIds !== undefined) setDraftSet(new Set(data.draftIds));
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
+    const t = window.setTimeout(() => {
+      savePersistedWorkspace({
+        workingPrograms,
+        modsMap,
+        sandbox,
+        customMap,
+        draftIds: [...draftSet].sort(),
+      });
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [hydrated, workingPrograms, modsMap, sandbox, customMap, draftSet]);
 
   const getWorkingProgram = useCallback(
     (id: string) => workingPrograms[id] ?? null,
