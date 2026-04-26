@@ -2,17 +2,47 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  calculateMetrics,
-  generateRecommendations,
   generateNarrative,
-  simulateAdaptation,
+  generateRecommendations,
   defaultSandbox,
   type SandboxState,
+  type SimulationMetrics,
 } from "@/lib/mock-data";
 import { useWorkspace } from "@/components/workspace-provider";
 import { cn } from "@/lib/utils";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import type { AdaptApiResult } from "@/lib/adaptation-engine";
+import { ChevronDown } from "lucide-react";
+
+const EMPTY_METRICS: SimulationMetrics = {
+  fatigueScore: 0,
+  progressScore: 0,
+  plateauRisk: 0,
+  adherenceDifficulty: 0,
+};
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(t || res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
+type PredictResponse = SimulationMetrics & {
+  featureSummary: Record<string, unknown>;
+};
 
 export default function SimulatePage() {
   const params = useParams<{ id: string }>();
@@ -31,63 +61,115 @@ export default function SimulatePage() {
   const { program, isCustom } = resolved;
   const mods = getModifiers(program.id);
 
-  const metrics = useMemo(
-    () =>
-      calculateMetrics(
+  const [metrics, setMetrics] = useState<SimulationMetrics | null>(null);
+  const [baseMetrics, setBaseMetrics] = useState<SimulationMetrics | null>(null);
+  const [predictLoading, setPredictLoading] = useState(true);
+  const [predictError, setPredictError] = useState<string | null>(null);
+
+  const [adaptResult, setAdaptResult] = useState<AdaptApiResult | null>(null);
+  const [adaptLoading, setAdaptLoading] = useState(false);
+  const [adaptError, setAdaptError] = useState<string | null>(null);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const displayMetrics = metrics ?? EMPTY_METRICS;
+  const displayBase = baseMetrics ?? EMPTY_METRICS;
+
+  useEffect(() => {
+    setAdaptResult(null);
+    setAdaptError(null);
+  }, [program, mods.volume, mods.intensity, mods.frequency, sandbox]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      void (async () => {
+        setPredictLoading(true);
+        setPredictError(null);
+        try {
+          const bodyCurrent = {
+            program,
+            modifiers: {
+              volume: mods.volume,
+              intensity: mods.intensity,
+              frequency: mods.frequency,
+            },
+            sandbox,
+          };
+          const bodyBase = {
+            program,
+            modifiers: { volume: 100, intensity: 100, frequency: 100 },
+            sandbox: defaultSandbox,
+          };
+          const [cur, base] = await Promise.all([
+            postJson<PredictResponse>("/api/predict", bodyCurrent),
+            postJson<PredictResponse>("/api/predict", bodyBase),
+          ]);
+          setMetrics({
+            fatigueScore: cur.fatigueScore,
+            progressScore: cur.progressScore,
+            plateauRisk: cur.plateauRisk,
+            adherenceDifficulty: cur.adherenceDifficulty,
+          });
+          setBaseMetrics({
+            fatigueScore: base.fatigueScore,
+            progressScore: base.progressScore,
+            plateauRisk: base.plateauRisk,
+            adherenceDifficulty: base.adherenceDifficulty,
+          });
+        } catch (e) {
+          setPredictError(e instanceof Error ? e.message : "Prediction failed");
+        } finally {
+          setPredictLoading(false);
+        }
+      })();
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [program, mods.volume, mods.intensity, mods.frequency, sandbox]);
+
+  const heuristicNarrative = generateNarrative(displayMetrics, sandbox);
+  const heuristicRecs = generateRecommendations(displayMetrics, sandbox);
+
+  const runAdaptation = useCallback(async () => {
+    setAdaptLoading(true);
+    setAdaptError(null);
+    try {
+      const out = await postJson<AdaptApiResult>("/api/adapt", {
         program,
-        mods.volume,
-        mods.intensity,
-        Math.round(program.daysPerWeek * (mods.frequency / 100)),
+        modifiers: {
+          volume: mods.volume,
+          intensity: mods.intensity,
+          frequency: mods.frequency,
+        },
         sandbox,
-      ),
-    [program, mods, sandbox],
-  );
-
-  const baseMetrics = useMemo(
-    () =>
-      calculateMetrics(
-        program,
-        100,
-        100,
-        program.daysPerWeek,
-        defaultSandbox,
-      ),
-    [program],
-  );
-
-  const recs = useMemo(
-    () => generateRecommendations(metrics, sandbox),
-    [metrics, sandbox],
-  );
-  const narrative = useMemo(
-    () => generateNarrative(metrics, sandbox),
-    [metrics, sandbox],
-  );
-
-  const adapted = useMemo(
-    () =>
-      simulateAdaptation(metrics, sandbox, {
-        volume: mods.volume,
-        intensity: mods.intensity,
-        frequency: mods.frequency,
-      }),
-    [metrics, sandbox, mods],
-  );
+      });
+      setAdaptResult(out);
+    } catch (e) {
+      setAdaptError(e instanceof Error ? e.message : "Adaptation failed");
+    } finally {
+      setAdaptLoading(false);
+    }
+  }, [program, mods.volume, mods.intensity, mods.frequency, sandbox]);
 
   const applyAdaptation = () => {
+    if (!adaptResult) return;
     setModifiers(program.id, {
-      volume: adapted.volume,
-      intensity: adapted.intensity,
-      frequency: adapted.frequency,
+      volume: adaptResult.adaptedModifiers.volume,
+      intensity: adaptResult.adaptedModifiers.intensity,
+      frequency: adaptResult.adaptedModifiers.frequency,
     });
+    setAdaptResult(null);
   };
 
   const updateSandbox = (patch: Partial<SandboxState>) =>
     setSandbox({ ...sandbox, ...patch });
 
+  const showApiNarrative = adaptResult?.narrative;
+
   return (
     <div className="mx-auto max-w-7xl px-6 py-10 md:py-14">
-      {/* Breadcrumbs */}
       <nav className="text-sm text-muted-foreground">
         {isCustom ? (
           <Link href="/my-programs" className="hover:text-foreground">
@@ -109,7 +191,6 @@ export default function SimulatePage() {
         <span className="text-foreground">Simulator</span>
       </nav>
 
-      {/* Header */}
       <header className="mt-6 flex flex-wrap items-end justify-between gap-6 border-b border-border pb-8">
         <div>
           <div className="text-xs uppercase tracking-widest text-muted-foreground">
@@ -133,9 +214,7 @@ export default function SimulatePage() {
         </Link>
       </header>
 
-      {/* Two-column body */}
       <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_1.2fr]">
-        {/* Sandbox controls */}
         <section>
           <div className="rounded-xl border border-border bg-card p-6 md:p-8">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">
@@ -205,7 +284,6 @@ export default function SimulatePage() {
             </div>
           </div>
 
-          {/* Modifiers (read-only display + adapt button) */}
           <div className="mt-6 rounded-xl border border-border bg-card p-6 md:p-8">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">
               Program modifiers
@@ -236,54 +314,120 @@ export default function SimulatePage() {
                   Adapt to current state
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  → V{adapted.volume} · I{adapted.intensity} · F
-                  {adapted.frequency}
+                  {adaptResult ? (
+                    <>
+                      → V{adaptResult.adaptedModifiers.volume} · I
+                      {adaptResult.adaptedModifiers.intensity} · F
+                      {adaptResult.adaptedModifiers.frequency}
+                    </>
+                  ) : (
+                    <span className="italic">Run analysis for suggested dials</span>
+                  )}
                 </span>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {adapted.rationale}
-              </p>
-              <button
-                onClick={applyAdaptation}
-                className="mt-3 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                Apply suggested modifiers
-              </button>
+              {adaptError && (
+                <p className="mt-2 text-xs text-accent">{adaptError}</p>
+              )}
+              {adaptResult && (
+                <div className="mt-3 rounded-md border border-border/80 bg-background/60 p-3 text-[11px] text-muted-foreground">
+                  <div className="font-medium uppercase tracking-widest text-foreground/80">
+                    Before → after (model)
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 tabular-nums">
+                    <MetricPair
+                      label="Fatigue"
+                      before={adaptResult.currentMetrics.fatigueScore}
+                      after={adaptResult.adaptedMetrics.fatigueScore}
+                    />
+                    <MetricPair
+                      label="Progress"
+                      before={adaptResult.currentMetrics.progressScore}
+                      after={adaptResult.adaptedMetrics.progressScore}
+                    />
+                    <MetricPair
+                      label="Plateau"
+                      before={adaptResult.currentMetrics.plateauRisk}
+                      after={adaptResult.adaptedMetrics.plateauRisk}
+                    />
+                    <MetricPair
+                      label="Adherence"
+                      before={adaptResult.currentMetrics.adherenceDifficulty}
+                      after={adaptResult.adaptedMetrics.adherenceDifficulty}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => void runAdaptation()}
+                  disabled={adaptLoading || predictLoading}
+                  className="w-full rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 sm:flex-1"
+                >
+                  {adaptLoading ? "Analyzing…" : "Simulate adaptation"}
+                </button>
+                <button
+                  type="button"
+                  onClick={applyAdaptation}
+                  disabled={!adaptResult || adaptLoading}
+                  className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 sm:flex-1"
+                >
+                  Apply suggested modifiers
+                </button>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Metrics + narrative + recommendations */}
         <section className="space-y-6">
-          {/* Metrics grid */}
-          <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-2">
+          {predictError && (
+            <div
+              className="rounded-lg border border-accent/40 bg-accent/5 px-4 py-3 text-sm text-accent"
+              role="alert"
+            >
+              {predictError}
+            </div>
+          )}
+
+          <div
+            className={cn(
+              "relative grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-2",
+              predictLoading && "opacity-70",
+            )}
+          >
+            {predictLoading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/30 backdrop-blur-[1px]">
+                <span className="rounded-md border border-border bg-card px-3 py-1.5 font-serif text-sm text-muted-foreground">
+                  Updating prediction…
+                </span>
+              </div>
+            )}
             <MetricCell
               label="Fatigue"
-              value={metrics.fatigueScore}
-              base={baseMetrics.fatigueScore}
+              value={displayMetrics.fatigueScore}
+              base={displayBase.fatigueScore}
               tone="caution"
             />
             <MetricCell
               label="Progress"
-              value={metrics.progressScore}
-              base={baseMetrics.progressScore}
+              value={displayMetrics.progressScore}
+              base={displayBase.progressScore}
               tone="positive"
             />
             <MetricCell
               label="Plateau risk"
-              value={metrics.plateauRisk}
-              base={baseMetrics.plateauRisk}
+              value={displayMetrics.plateauRisk}
+              base={displayBase.plateauRisk}
               tone="caution"
             />
             <MetricCell
               label="Adherence load"
-              value={metrics.adherenceDifficulty}
-              base={baseMetrics.adherenceDifficulty}
+              value={displayMetrics.adherenceDifficulty}
+              base={displayBase.adherenceDifficulty}
               tone="caution"
             />
           </div>
 
-          {/* Narrative */}
           <div className="rounded-xl border border-border bg-card p-6 md:p-8">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">
               Reading
@@ -291,27 +435,32 @@ export default function SimulatePage() {
             <h3 className="mt-2 font-serif text-2xl tracking-tight">
               How the system looks today
             </h3>
-            <ul className="mt-5 space-y-3">
-              {narrative.map((line, i) => (
-                <li
-                  key={i}
-                  className="flex items-start gap-3 border-b border-border/60 pb-3 text-base last:border-0 last:pb-0"
-                >
-                  <span
-                    className={cn(
-                      "mt-2 h-1.5 w-1.5 shrink-0 rounded-full",
-                      line.tone === "positive" && "bg-chart-3",
-                      line.tone === "caution" && "bg-accent",
-                      line.tone === "neutral" && "bg-muted-foreground",
-                    )}
-                  />
-                  <span className="leading-relaxed">{line.text}</span>
-                </li>
-              ))}
-            </ul>
+            {showApiNarrative ? (
+              <p className="mt-5 text-base leading-relaxed text-foreground/90">
+                {showApiNarrative}
+              </p>
+            ) : (
+              <ul className="mt-5 space-y-3">
+                {heuristicNarrative.map((line, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-3 border-b border-border/60 pb-3 text-base last:border-0 last:pb-0"
+                  >
+                    <span
+                      className={cn(
+                        "mt-2 h-1.5 w-1.5 shrink-0 rounded-full",
+                        line.tone === "positive" && "bg-chart-3",
+                        line.tone === "caution" && "bg-accent",
+                        line.tone === "neutral" && "bg-muted-foreground",
+                      )}
+                    />
+                    <span className="leading-relaxed">{line.text}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
-          {/* Recommendations */}
           <div className="rounded-xl border border-border bg-card p-6 md:p-8">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">
               Recommendations
@@ -319,43 +468,135 @@ export default function SimulatePage() {
             <h3 className="mt-2 font-serif text-2xl tracking-tight">
               What to consider
             </h3>
-            {recs.length === 0 ? (
-              <p className="mt-4 text-sm text-muted-foreground">
-                Nothing pressing — the program looks well-calibrated to your
-                current state.
-              </p>
-            ) : (
+            {adaptResult && adaptResult.recommendations.length > 0 ? (
               <ul className="mt-5 space-y-3">
-                {recs.map((r) => (
+                {adaptResult.recommendations.map((r, idx) => (
                   <li
-                    key={r.id}
+                    key={`${r.title}-${idx}`}
                     className={cn(
                       "rounded-lg border p-4",
-                      r.type === "warning" &&
-                        "border-accent/30 bg-accent/5",
-                      r.type === "success" &&
-                        "border-chart-3/30 bg-chart-3/5",
-                      r.type === "info" && "border-border bg-background",
-                      r.type === "optimization" &&
-                        "border-border bg-background",
+                      r.type === "warning" && "border-accent/30 bg-accent/5",
+                      r.type === "recovery" && "border-accent/25 bg-accent/[0.07]",
+                      r.type === "maintain" && "border-chart-3/30 bg-chart-3/5",
+                      r.type === "optimization" && "border-border bg-background",
                     )}
                   >
-                    <div className="flex items-baseline justify-between gap-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-3">
                       <div className="text-sm font-medium">{r.title}</div>
                       <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                        {r.impact} impact
+                        Confidence {(r.confidence * 100).toFixed(0)}%
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {r.description}
+                      {r.reasoning}
                     </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/80">
+                        Adjustment:
+                      </span>{" "}
+                      {r.adjustment}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/80">
+                        Expected impact:
+                      </span>{" "}
+                      {r.expectedImpact}
+                    </p>
+                    {r.supportingEvidence.length > 0 && (
+                      <Collapsible className="group/c mt-3 border-t border-border/60 pt-3">
+                        <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-widest text-muted-foreground hover:text-foreground">
+                          <span>Why this recommendation?</span>
+                          <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]/c:rotate-180" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-3 space-y-3">
+                          {r.supportingEvidence.map((ev, j) => (
+                            <blockquote
+                              key={`${ev.sourceTitle}-${j}`}
+                              className="border-l-2 border-border pl-3 text-sm leading-relaxed text-muted-foreground"
+                            >
+                              <cite className="not-italic text-xs font-medium text-foreground/80">
+                                {ev.sourceTitle}
+                                {ev.chunkTitle ? ` · ${ev.chunkTitle}` : ""}
+                              </cite>
+                              <p className="mt-1">{ev.snippet}</p>
+                            </blockquote>
+                          ))}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )}
                   </li>
                 ))}
               </ul>
+            ) : heuristicRecs.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Nothing pressing — the program looks well-calibrated to your current state.
+              </p>
+            ) : (
+              <>
+                <ul className="mt-5 space-y-3">
+                  {heuristicRecs.map((r) => (
+                    <li
+                      key={r.id}
+                      className={cn(
+                        "rounded-lg border p-4",
+                        r.type === "warning" && "border-accent/30 bg-accent/5",
+                        r.type === "success" && "border-chart-3/30 bg-chart-3/5",
+                        r.type === "info" && "border-border bg-background",
+                        r.type === "optimization" && "border-border bg-background",
+                      )}
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <div className="text-sm font-medium">{r.title}</div>
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                          {r.impact} impact
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">{r.description}</p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 text-xs text-muted-foreground">
+                  Run <strong className="font-medium text-foreground">Simulate adaptation</strong> for
+                  retrieval-backed cards with cited evidence.
+                </p>
+              </>
             )}
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function MetricPair({
+  label,
+  before,
+  after,
+}: {
+  label: string;
+  before: number;
+  after: number;
+}) {
+  const d = after - before;
+  return (
+    <div className="flex justify-between gap-2">
+      <span>{label}</span>
+      <span className="tabular-nums text-foreground">
+        {before}
+        <span className="text-muted-foreground"> → </span>
+        {after}
+        {d !== 0 && (
+          <span
+            className={cn(
+              "ml-1 text-[10px]",
+              d > 0 ? "text-chart-3" : "text-accent",
+            )}
+          >
+            ({d > 0 ? "+" : ""}
+            {d})
+          </span>
+        )}
+      </span>
     </div>
   );
 }
@@ -423,6 +664,7 @@ function SegmentedField({
           return (
             <button
               key={o.v}
+              type="button"
               onClick={() => onChange(o.v)}
               className={cn(
                 "rounded px-3 py-1.5 text-xs transition-colors",
@@ -452,7 +694,8 @@ function MetricCell({
   tone: "positive" | "caution";
 }) {
   const delta = value - base;
-  const positive = (tone === "positive" && delta >= 0) || (tone === "caution" && delta <= 0);
+  const positive =
+    (tone === "positive" && delta >= 0) || (tone === "caution" && delta <= 0);
 
   return (
     <div className="bg-card p-6">
@@ -478,7 +721,6 @@ function MetricCell({
         </div>
         <div className="text-sm text-muted-foreground">/ 100</div>
       </div>
-      {/* Bar */}
       <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
         <div
           className={cn(
