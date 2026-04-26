@@ -1,0 +1,27 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Next.js
+.next
+out
+build
+dist
+
+# Env / local data
+.env
+.env*.local
+.data
+
+# Python / evaluation
+.venv
+venv
+__pycache__
+*.pyc
+.ipynb_checkpoints
+evaluation/data/*.csv
+
+# IDE / OS
+.DS_Store
+*.log
