@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "eval:export": "tsx evaluation/export_training.ts",
+    "eval:fit": "python3 evaluation/fit_ridge.py",
+    "eval:train": "npm run eval:export && npm run eval:fit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -60,6 +63,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "tsx": "^4.19.4",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22",
     "@types/react": "^19",
