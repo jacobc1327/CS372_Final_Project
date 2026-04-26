@@ -1,0 +1,153 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+:root {
+  /* Editorial light palette — warm paper + deep ink + terracotta */
+  --background: oklch(0.985 0.008 80);
+  --foreground: oklch(0.18 0.012 250);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.012 250);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.012 250);
+
+  --primary: oklch(0.22 0.018 240);
+  --primary-foreground: oklch(0.985 0.008 80);
+
+  --secondary: oklch(0.95 0.01 80);
+  --secondary-foreground: oklch(0.22 0.018 240);
+
+  --muted: oklch(0.955 0.008 80);
+  --muted-foreground: oklch(0.48 0.014 250);
+
+  --accent: oklch(0.6 0.13 38);
+  --accent-foreground: oklch(0.985 0.008 80);
+
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.985 0.008 80);
+
+  --border: oklch(0.91 0.008 80);
+  --input: oklch(0.93 0.008 80);
+  --ring: oklch(0.6 0.13 38);
+
+  --chart-1: oklch(0.6 0.13 38);
+  --chart-2: oklch(0.45 0.06 220);
+  --chart-3: oklch(0.5 0.09 150);
+  --chart-4: oklch(0.65 0.11 75);
+  --chart-5: oklch(0.4 0.04 280);
+
+  --radius: 0.5rem;
+
+  /* Stress heatmap (light-mode tones) */
+  --stress-rest: oklch(0.97 0.005 80);
+  --stress-low: oklch(0.93 0.04 70);
+  --stress-mid: oklch(0.86 0.08 50);
+  --stress-high: oklch(0.76 0.13 38);
+  --stress-peak: oklch(0.6 0.18 30);
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-stress-rest: var(--stress-rest);
+  --color-stress-low: var(--stress-low);
+  --color-stress-mid: var(--stress-mid);
+  --color-stress-high: var(--stress-high);
+  --color-stress-peak: var(--stress-peak);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'ss01', 'cv01', 'cv02';
+    letter-spacing: -0.005em;
+  }
+  .font-serif {
+    font-feature-settings: 'liga', 'dlig', 'ss01';
+    letter-spacing: -0.018em;
+  }
+}
+
+/* Custom range slider */
+input[type='range'].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--muted);
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+input[type='range'].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--primary);
+  border-radius: 999px;
+  cursor: grab;
+  transition: transform 0.15s ease;
+  border: 2px solid var(--background);
+}
+input[type='range'].slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+input[type='range'].slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.05);
+}
+input[type='range'].slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--primary);
+  border-radius: 999px;
+  cursor: grab;
+  border: 2px solid var(--background);
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in-up { animation: fadeInUp 0.4s ease-out; }
+
+@keyframes drawerIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-drawer-in { animation: drawerIn 0.25s ease-out; }
