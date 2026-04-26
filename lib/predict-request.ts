@@ -66,30 +66,3 @@ export function normalizePredictBody(
     sandbox: clampSandbox(s),
   };
 }
-
-export const AdaptPostBodySchema = PredictPostBodySchema.extend({
-  currentModifiers: ModifiersPartialFields.optional(),
-  retrievalContext: z.array(z.string()).optional(),
-});
-
-export type AdaptPostBody = z.infer<typeof AdaptPostBodySchema>;
-
-export function normalizeAdaptPost(raw: AdaptPostBody): {
-  program: Program;
-  modifiers: { volume: number; intensity: number; frequency: number };
-  sandbox: SandboxState;
-  currentModifiers: { volume: number; intensity: number; frequency: number };
-  retrievalContext: string[];
-} {
-  const core = normalizePredictBody(raw);
-  const cm = raw.currentModifiers ?? {};
-  return {
-    ...core,
-    currentModifiers: {
-      volume: clampPct(cm.volume, core.modifiers.volume),
-      intensity: clampPct(cm.intensity, core.modifiers.intensity),
-      frequency: clampPct(cm.frequency, core.modifiers.frequency),
-    },
-    retrievalContext: raw.retrievalContext ?? [],
-  };
-}
