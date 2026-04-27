@@ -54,8 +54,8 @@ npm run eval:retrieval
 
 
 ## Video links
-- Demo video (3–5 minutes): **REPLACE_ME_DEMO_VIDEO_URL**
-- Technical walkthrough (5–10 minutes): **REPLACE_ME_TECH_WALKTHROUGH_URL**
+- Demo video (3–5 minutes): `https://drive.google.com/file/d/14QZ4Nehwvsfe70458uUy1fx8ebIuGbm3/view?usp=sharing`
+- Technical walkthrough (5–10 minutes): `https://drive.google.com/drive/u/0/folders/1lhWCh_w8jcFE0bz65dQDvTgTb2D8f3uP`
 
 ## Individual contributions
 This project was completed individually by Jacob Cho.
