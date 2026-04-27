@@ -239,7 +239,7 @@ export default function HomePage() {
                 </h3>
                 <p className="mt-3 max-w-md opacity-80">
                   Start with a blank canvas. Pick exercises, set sets and reps,
-                  shape your week — and simulate it.
+                  shape your week — and coach it.
                 </p>
               </div>
               <div className="mt-8 inline-flex items-center gap-2 text-sm font-medium">

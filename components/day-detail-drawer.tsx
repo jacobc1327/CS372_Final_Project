@@ -10,6 +10,8 @@ interface DayDetailDrawerProps {
   onAdjustSets: (exId: string, delta: number) => void;
   onAdjustReps: (exId: string, reps: string) => void;
   onAdjustIntensity: (exId: string, value: number) => void;
+  /** Log last comfortable working weight (kg) for this slot, or null to clear. */
+  onAdjustWorkingWeightKg: (exId: string, kg: number | null) => void;
   onRename: (exId: string, name: string) => void;
   onRemove: (exId: string) => void;
   onAdd: () => void;
@@ -34,6 +36,7 @@ export function DayDetailDrawer({
   onAdjustSets,
   onAdjustReps,
   onAdjustIntensity,
+  onAdjustWorkingWeightKg,
   onRename,
   onRemove,
   onAdd,
@@ -100,6 +103,7 @@ export function DayDetailDrawer({
                   onAdjustSets={(d) => onAdjustSets(ex.id, d)}
                   onAdjustReps={(reps) => onAdjustReps(ex.id, reps)}
                   onAdjustIntensity={(v) => onAdjustIntensity(ex.id, v)}
+                  onAdjustWorkingWeightKg={(kg) => onAdjustWorkingWeightKg(ex.id, kg)}
                   onRename={(name) => onRename(ex.id, name)}
                   onRemove={() => onRemove(ex.id)}
                 />
@@ -130,6 +134,7 @@ function ExerciseRow({
   onAdjustSets,
   onAdjustReps,
   onAdjustIntensity,
+  onAdjustWorkingWeightKg,
   onRename,
   onRemove,
 }: {
@@ -137,6 +142,7 @@ function ExerciseRow({
   onAdjustSets: (delta: number) => void;
   onAdjustReps: (reps: string) => void;
   onAdjustIntensity: (v: number) => void;
+  onAdjustWorkingWeightKg: (kg: number | null) => void;
   onRename: (name: string) => void;
   onRemove: () => void;
 }) {
@@ -230,6 +236,47 @@ function ExerciseRow({
           />
         </div>
       )}
+
+      <div className="mt-4 border-t border-border/60 pt-4">
+        <div className="mb-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+          Working weight (kg, optional)
+        </div>
+        <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+          Log the load you actually use for this prescription. It refines analytics and adaptation
+          text alongside %1RM intensity.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min={0}
+            max={600}
+            step={0.5}
+            placeholder="—"
+            value={ex.workingWeightKg ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "") {
+                onAdjustWorkingWeightKg(null);
+                return;
+              }
+              const n = Number(v);
+              if (!Number.isFinite(n) || n < 0) return;
+              if (n === 0) onAdjustWorkingWeightKg(null);
+              else onAdjustWorkingWeightKg(Math.round(n * 10) / 10);
+            }}
+            className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm tabular-nums focus:border-foreground/30 focus:outline-none"
+          />
+          {(ex.workingWeightKg != null && ex.workingWeightKg > 0) && (
+            <button
+              type="button"
+              onClick={() => onAdjustWorkingWeightKg(null)}
+              className="shrink-0 rounded-md border border-border px-2.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -88,7 +88,7 @@ export default function MyProgramsPage() {
                   ? "1 published program"
                   : `${published.length} published programs`
               }
-              description="Programs you've finished setting up. Open any to view, edit, or simulate."
+              description="Programs you've finished setting up. Open any to coach, diagnose, or edit."
             >
               <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
                 {published.map((p) => (
@@ -313,7 +313,7 @@ function EmptyState() {
         </Link>
       </div>
       <p className="mt-8 text-xs text-muted-foreground">
-        Note: custom programs live in your browser session and reset on refresh.
+        Note: custom programs are stored in this browser (localStorage). Clearing site data will remove them.
       </p>
     </div>
   );

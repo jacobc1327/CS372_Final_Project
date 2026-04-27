@@ -37,6 +37,10 @@ export interface ProgramFeatureVector {
   deloadWeeks: number;
   goalAlignment: number;
   recoveryAdjustedLoad: number;
+  /** Count of exercises with a positive `workingWeightKg` across the template. */
+  loggedWorkingWeightExercises: number;
+  /** Average per-week sum of (scaled sets × workingWeightKg) for logged lifts; 0 if none. */
+  reportedLoadVolumeKg: number;
 }
 
 const MUSCLE_GROUPS: MuscleGroup[] = [
@@ -228,6 +232,30 @@ function squatHingeFromVolume(v: Record<MuscleGroup, number>): { squat: number; 
   return { squat, hinge };
 }
 
+function userLoadSignals(program: Program, volumePct: number): {
+  loggedWorkingWeightExercises: number;
+  reportedLoadVolumeKg: number;
+} {
+  let logged = 0;
+  let sumKgSets = 0;
+  const nWeeks = Math.max(1, program.weeks.length);
+  for (const w of program.weeks) {
+    for (const d of w.days) {
+      for (const e of d.exercises) {
+        const kg = e.workingWeightKg;
+        if (kg != null && kg > 0 && Number.isFinite(kg)) {
+          logged += 1;
+          sumKgSets += scaledSets(e.sets, volumePct) * kg;
+        }
+      }
+    }
+  }
+  return {
+    loggedWorkingWeightExercises: logged,
+    reportedLoadVolumeKg: sumKgSets / nWeeks,
+  };
+}
+
 function goalAlignmentScore(program: Program, sandbox: SandboxState): number {
   const cat = program.category;
   const g = sandbox.goal;
@@ -280,6 +308,8 @@ export function extractProgramFeatures(
       deloadWeeks: 0,
       goalAlignment: goalAlignmentScore(program, sandbox),
       recoveryAdjustedLoad: 0,
+      loggedWorkingWeightExercises: 0,
+      reportedLoadVolumeKg: 0,
     };
   }
 
@@ -303,6 +333,10 @@ export function extractProgramFeatures(
   const deloadWeeks = program.weeks.filter((w) => w.deload).length;
 
   const recoveryAdjustedLoad = weeklyStressMean * recoveryStressMultiplier(sandbox);
+  const { loggedWorkingWeightExercises, reportedLoadVolumeKg } = userLoadSignals(
+    program,
+    modifiers.volume,
+  );
 
   return {
     daysPerWeek: program.daysPerWeek,
@@ -321,6 +355,8 @@ export function extractProgramFeatures(
     deloadWeeks,
     goalAlignment: goalAlignmentScore(program, sandbox),
     recoveryAdjustedLoad,
+    loggedWorkingWeightExercises,
+    reportedLoadVolumeKg,
   };
 }
 

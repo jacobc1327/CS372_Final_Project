@@ -8,8 +8,11 @@
     "start": "next start",
     "lint": "eslint .",
     "eval:export": "tsx evaluation/export_training.ts",
-    "eval:fit": "python3 evaluation/fit_ridge.py",
+    "eval:fit": "python3 evaluation/eval_ridge.py",
+    "eval:report": "python3 evaluation/eval_ridge.py",
     "eval:train": "npm run eval:export && npm run eval:fit"
+    ,
+    "eval:retrieval": "tsx evaluation/retrieval_eval.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

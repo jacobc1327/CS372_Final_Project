@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   buildWeekGrid,
   programMaxStress,
@@ -12,6 +12,8 @@ import {
 } from "@/lib/mock-data";
 import { useWorkspace } from "@/components/workspace-provider";
 import { DayDetailDrawer } from "@/components/day-detail-drawer";
+import { ProgramReadinessPanel } from "@/components/program-readiness-panel";
+import { assessProgramCompleteness } from "@/lib/program-completeness";
 import { cn } from "@/lib/utils";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -94,6 +96,19 @@ export default function EditorPage() {
       ),
     }));
   };
+  const adjustWorkingWeightKg = (dayId: string, exId: string, kg: number | null) => {
+    updateDay(dayId, (d) => ({
+      ...d,
+      exercises: d.exercises.map((e) => {
+        if (e.id !== exId) return e;
+        if (kg == null || kg <= 0 || !Number.isFinite(kg)) {
+          const { workingWeightKg: _w, ...rest } = e;
+          return rest as typeof e;
+        }
+        return { ...e, workingWeightKg: kg };
+      }),
+    }));
+  };
   const renameEx = (dayId: string, exId: string, name: string) => {
     updateDay(dayId, (d) => ({
       ...d,
@@ -150,6 +165,8 @@ export default function EditorPage() {
     0,
   );
   const totalSessions = week?.days.length;
+
+  const completeness = useMemo(() => assessProgramCompleteness(program), [program]);
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10 md:py-14">
@@ -217,10 +234,27 @@ export default function EditorPage() {
             </button>
           )}
           <Link
+            href={`/programs/${program.id}/coach`}
+            className={cn(
+              "rounded-md border px-4 py-2 text-sm hover:bg-muted",
+              completeness.ready
+                ? "border-border bg-card"
+                : "border-accent/45 bg-accent/5 text-accent",
+            )}
+            title={
+              completeness.ready
+                ? "Open AI Coach"
+                : "Program incomplete — the Coach will show a readiness warning"
+            }
+          >
+            Coach →{!completeness.ready ? " *" : ""}
+          </Link>
+          <Link
             href={`/programs/${program.id}/simulate`}
             className="rounded-md border border-border bg-card px-4 py-2 text-sm hover:bg-muted"
+            title="Open diagnostics dashboard"
           >
-            Simulate →
+            Diagnose
           </Link>
           {!isCustom && (
             <button
@@ -238,6 +272,8 @@ export default function EditorPage() {
           )}
         </div>
       </header>
+
+      <ProgramReadinessPanel result={completeness} context="editor" />
 
       {/* Week tabs */}
       <div className="mt-8 flex flex-wrap gap-1 border-b border-border">
@@ -423,6 +459,9 @@ export default function EditorPage() {
         onAdjustSets={(exId, delta) => openDay && adjustSets(openDay.id, exId, delta)}
         onAdjustReps={(exId, reps) => openDay && adjustReps(openDay.id, exId, reps)}
         onAdjustIntensity={(exId, v) => openDay && adjustIntensity(openDay.id, exId, v)}
+        onAdjustWorkingWeightKg={(exId, kg) =>
+          openDay && adjustWorkingWeightKg(openDay.id, exId, kg)
+        }
         onRename={(exId, name) => openDay && renameEx(openDay.id, exId, name)}
         onRemove={(exId) => openDay && removeEx(openDay.id, exId)}
         onAdd={() => openDay && addEx(openDay.id)}

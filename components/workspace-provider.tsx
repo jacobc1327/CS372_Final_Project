@@ -19,6 +19,7 @@ import {
   createEmptyProgram,
 } from "@/lib/mock-data";
 import { loadPersistedWorkspace, savePersistedWorkspace } from "@/lib/workspace-persistence";
+import { seedDemoDataIfEmpty } from "@/lib/demo-seed";
 
 export interface Modifiers {
   volume: number;
@@ -79,6 +80,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const skipNextSave = useRef(false);
 
   useEffect(() => {
+    // Seed demo data once (first run only) so the demo doesn't require editing.
+    // Runs before workspace hydration so the UI reads seeded localStorage immediately.
+    seedDemoDataIfEmpty();
     const data = loadPersistedWorkspace();
     skipNextSave.current = true;
     if (data) {

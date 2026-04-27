@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Ordinary least squares (multivariate) fit for four simulation targets.
+Deprecated: replaced by `evaluation/eval_ridge.py` which includes a train/val/test split,
+ridge regularization, and a hyperparameter sweep with a report.
 Trained labels come from the legacy `calculateMetrics` via export_training.ts.
 
 Usage (from repo root):
-  npx tsx evaluation/export_training.ts
-  python3 evaluation/fit_ridge.py
+  npm run eval:train
 """
 from __future__ import annotations
 
@@ -21,8 +21,9 @@ WEIGHTS_OUT = ROOT / "lib" / "ai" / "weights.json"
 
 
 def main() -> None:
-    if not CSV_PATH.is_file():
-        raise SystemExit(f"Missing {CSV_PATH}; run export_training.ts first.")
+    raise SystemExit(
+        "Deprecated. Use `python3 evaluation/eval_ridge.py` (or `npm run eval:train`)."
+    )
 
     rows: list[list[float]] = []
     with CSV_PATH.open(newline="") as f:

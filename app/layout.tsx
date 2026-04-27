@@ -21,7 +21,7 @@ const fraunces = Fraunces({
 export const metadata: Metadata = {
   title: "Workout Program Editor — CS372 Final Project",
   description:
-    "Browse, edit, and simulate famous strength-training programs. See how changes affect fatigue, progress, and plateau risk before week one.",
+    "Browse, edit, and coach strength-training programs. Turn your constraints and history into an adjusted week plan, then log sessions and iterate.",
   generator: "v0.app",
 };
 

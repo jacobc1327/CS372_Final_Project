@@ -9,6 +9,8 @@ export interface Exercise {
   reps: string;
   intensity: number; // % of 1RM (0 if accessory / unloaded)
   group: MuscleGroup;
+  /** Optional: last comfortable working weight (kg) for this slot — improves load tracking in features/adaptation. */
+  workingWeightKg?: number | null;
 }
 
 export type MuscleGroup =

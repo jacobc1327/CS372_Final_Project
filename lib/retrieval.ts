@@ -36,6 +36,26 @@ export interface RetrievedSnippet {
 
 const KNOWLEDGE_DIR = path.join(process.cwd(), "data", "knowledge");
 
+export type RetrievalMethod = "tfidf" | "bm25" | "hybrid";
+
+export interface RetrievalOptions {
+  /** Ranking method. Default: "hybrid". */
+  method?: RetrievalMethod;
+  /** BM25 tuning (only used for bm25/hybrid). */
+  bm25?: {
+    k1?: number; // default 1.2
+    b?: number; // default 0.75
+  };
+  /**
+   * Hybrid weighting: finalScore = tfidfWeight * tfidf + bm25Weight * bm25
+   * (only used for hybrid).
+   */
+  hybrid?: {
+    tfidfWeight?: number; // default 0.35
+    bm25Weight?: number; // default 1.0
+  };
+}
+
 export function tokenize(text: string): string[] {
   const m = text.toLowerCase().match(/[a-z0-9]+/g);
   return m ?? [];
@@ -140,7 +160,7 @@ function tfVector(chunk: KnowledgeChunk): Map<string, number> {
   return tf;
 }
 
-function scoreChunk(
+function scoreChunkTfidf(
   queryTerms: string[],
   chunk: KnowledgeChunk,
   df: Map<string, number>,
@@ -158,10 +178,45 @@ function scoreChunk(
   return score;
 }
 
+function termCounts(text: string): Map<string, number> {
+  const tokens = tokenize(text);
+  const counts = new Map<string, number>();
+  for (const t of tokens) counts.set(t, (counts.get(t) ?? 0) + 1);
+  return counts;
+}
+
+function scoreChunkBm25(
+  queryTerms: string[],
+  chunkCounts: Map<string, number>,
+  chunkLen: number,
+  df: Map<string, number>,
+  N: number,
+  avgdl: number,
+  k1: number,
+  b: number,
+): number {
+  // Classic BM25 with log((N - df + 0.5)/(df + 0.5) + 1) idf variant.
+  const dl = chunkLen || 1;
+  const denomNorm = k1 * (1 - b + (b * dl) / (avgdl || 1));
+  let score = 0;
+  for (const term of queryTerms) {
+    const f = chunkCounts.get(term) ?? 0;
+    if (f <= 0) continue;
+    const dfi = df.get(term) ?? 0;
+    const idf = Math.log(((N - dfi + 0.5) / (dfi + 0.5)) + 1);
+    score += (idf * (f * (k1 + 1))) / (f + denomNorm);
+  }
+  return score;
+}
+
 /**
  * TF–IDF retrieval over chunked markdown. No network calls.
  */
-export function retrieveRelevantKnowledge(query: string, topK = 5): RetrievedSnippet[] {
+export function retrieveRelevantKnowledge(
+  query: string,
+  topK = 5,
+  options: RetrievalOptions = {},
+): RetrievedSnippet[] {
   const q = query.trim();
   if (!q) return [];
   const queryTerms = tokenize(q);
@@ -174,11 +229,44 @@ export function retrieveRelevantKnowledge(query: string, topK = 5): RetrievedSni
   const df = buildDocumentFrequency(chunks);
   const N = chunks.length;
 
+  const method: RetrievalMethod = options.method ?? "hybrid";
+  const k1 = options.bm25?.k1 ?? 1.2;
+  const b = options.bm25?.b ?? 0.75;
+  const tfidfWeight = options.hybrid?.tfidfWeight ?? 0.35;
+  const bm25Weight = options.hybrid?.bm25Weight ?? 1.0;
+
+  const chunkText = (c: KnowledgeChunk) => `${c.sourceTitle} ${c.chunkTitle} ${c.body}`;
+  const chunkTokenCounts =
+    method === "tfidf"
+      ? null
+      : chunks.map((c) => {
+          const text = chunkText(c);
+          const counts = termCounts(text);
+          const len = tokenize(text).length;
+          return { counts, len };
+        });
+  const avgdl =
+    method === "tfidf"
+      ? 0
+      : (chunkTokenCounts!.reduce((sum, x) => sum + x.len, 0) / (chunkTokenCounts!.length || 1));
+
   const ranked = chunks
-    .map((chunk) => ({
-      chunk,
-      score: scoreChunk(queryTerms, chunk, df, N),
-    }))
+    .map((chunk, idx) => {
+      const tfidf = scoreChunkTfidf(queryTerms, chunk, df, N);
+      if (method === "tfidf") return { chunk, score: tfidf };
+      const bm25 = scoreChunkBm25(
+        queryTerms,
+        chunkTokenCounts![idx]!.counts,
+        chunkTokenCounts![idx]!.len,
+        df,
+        N,
+        avgdl,
+        k1,
+        b,
+      );
+      const score = method === "bm25" ? bm25 : tfidfWeight * tfidf + bm25Weight * bm25;
+      return { chunk, score };
+    })
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);

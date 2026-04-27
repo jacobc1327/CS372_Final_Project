@@ -63,8 +63,7 @@ export default function BuilderPage() {
           That program isn&apos;t in your workspace.
         </h1>
         <p className="mt-3 text-muted-foreground">
-          Custom programs live in your browser session and reset on page
-          refresh. Start a new one to keep building.
+          Custom programs are stored in this browser (localStorage). If you cleared site data or switched browsers, this draft may no longer be available.
         </p>
         <Link
           href="/create"
