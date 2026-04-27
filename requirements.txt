@@ -1,0 +1,3 @@
+# Python dependencies for offline evaluation scripts in `evaluation/`.
+# Install with: `python3 -m pip install -r requirements.txt`
+numpy>=1.26,<3

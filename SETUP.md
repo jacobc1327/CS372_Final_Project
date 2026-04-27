@@ -4,6 +4,12 @@
 - Node.js (recommended: current LTS)
 - Python 3 (only needed for the optional ridge-fit evaluation script)
 
+### Python deps (evaluation only)
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
 ### Install
 
 ```bash

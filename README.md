@@ -54,8 +54,11 @@ npm run eval:retrieval
 
 
 ## Video links
-- Demo video: (add link)
-- Technical walkthrough: (add link)
+- Demo video (3–5 minutes): **REPLACE_ME_DEMO_VIDEO_URL**
+- Technical walkthrough (5–10 minutes): **REPLACE_ME_TECH_WALKTHROUGH_URL**
+
+## Individual contributions
+This project was completed individually by Jacob Cho.
 
 ## Repo notes
 - Everything is stored locally in your browser (localStorage) for the course demo.
